@@ -1,0 +1,1497 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light}body{margin:0}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>QSimpleParser Workbench</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  /* Layout: header bar over a two-column workbench. Code above input on the left, output and API reference on the right.
+     Below 860px everything stacks and the page scrolls. */
+  :root {
+    --bg: #edeff4;
+    --surface: #f8f9fc;
+    --surface-2: #e4e7ee;
+    --ink: #1b2030;
+    --ink-2: #555e73;
+    --line: #cbd0dc;
+    --accent: #3d4fd6;
+    --accent-ink: #ffffff;
+    --mark-bg: #ffe08a;
+    --mark-fg: #1b2030;
+    --bad: #a8201a;
+    --bad-bg: #fbe9e7;
+    --font-ui: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12141a;
+      --surface: #191c25;
+      --surface-2: #232733;
+      --ink: #e7e9f0;
+      --ink-2: #9ca5b8;
+      --line: #313646;
+      --accent: #9aa6ff;
+      --accent-ink: #11131a;
+      --mark-bg: #e2b93b;
+      --mark-fg: #12141a;
+      --bad: #ff9088;
+      --bad-bg: #3a1f1e;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12141a;
+    --surface: #191c25;
+    --surface-2: #232733;
+    --ink: #e7e9f0;
+    --ink-2: #9ca5b8;
+    --line: #313646;
+    --accent: #9aa6ff;
+    --accent-ink: #11131a;
+    --mark-bg: #e2b93b;
+    --mark-fg: #12141a;
+    --bad: #ff9088;
+    --bad-bg: #3a1f1e;
+    color-scheme: dark;
+  }
+
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font: 400 14px/1.5 var(--font-ui);
+  }
+  * { box-sizing: border-box; }
+
+  .app {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-inline: 16px;
+    padding-block: 12px;
+  }
+
+  .bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 16px;
+  }
+  .brand { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; min-width: 0; }
+  .brand h1 { margin: 0; font: 600 17px/1.3 var(--font-ui); letter-spacing: -0.01em; }
+  .brand p { margin: 0; color: var(--ink-2); font-size: 13px; }
+  .controls { display: flex; align-items: center; gap: 8px; }
+
+  select, button { font: inherit; color: inherit; }
+  select {
+    height: 34px;
+    padding: 0 28px 0 10px;
+    background-color: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    max-width: 100%;
+  }
+  .run {
+    height: 34px;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 6px;
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .run:disabled { opacity: 0.6; cursor: progress; }
+  .run kbd {
+    font: 500 11px var(--font-mono);
+    padding: 1px 5px;
+    border-radius: 4px;
+    border: 1px solid currentColor;
+    opacity: 0.75;
+  }
+  select:focus-visible, .run:focus-visible, .tab:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .grid {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    gap: 12px;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1.5fr) minmax(0, 1fr);
+    grid-template-areas: "code out" "input out";
+  }
+  .code-pane { grid-area: code; }
+  .input-pane { grid-area: input; }
+  .out-pane { grid-area: out; }
+
+  .pane {
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .pane:focus-within { box-shadow: 0 0 0 2px var(--accent); }
+
+  .pane-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 2px 12px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  .label, .sec h2 {
+    margin: 0;
+    font: 500 11px/1.4 var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--ink-2);
+  }
+  .hint { font-size: 12px; color: var(--ink-2); }
+
+  textarea {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    padding: 12px;
+    border: 0;
+    outline: none;
+    resize: none;
+    background: transparent;
+    color: var(--ink);
+    font: 400 13px/1.6 var(--font-mono);
+    tab-size: 2;
+    white-space: pre;
+    overflow: auto;
+  }
+  #input { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+  .tabs {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 0 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  .tablist { display: flex; gap: 16px; }
+  .tab {
+    padding: 9px 0 7px;
+    background: none;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    font: 500 11px/1.4 var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--ink-2);
+    cursor: pointer;
+  }
+  .tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+  .status { font: 400 12px var(--font-mono); color: var(--ink-2); text-align: right; }
+
+  .panel {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .sec h2 { margin-bottom: 6px; }
+  .sec p { margin: 0 0 6px; color: var(--ink-2); font-size: 13px; }
+  pre {
+    margin: 0;
+    font: 400 13px/1.6 var(--font-mono);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .box { padding: 10px 12px; background: var(--surface-2); border-radius: 6px; }
+  .muted { color: var(--ink-2); }
+  .error { background: var(--bad-bg); color: var(--bad); padding: 10px 12px; border-radius: 6px; }
+  mark { background: var(--mark-bg); color: var(--mark-fg); border-radius: 2px; padding: 0 1px; }
+
+  .api-group { display: flex; flex-direction: column; gap: 4px; }
+  .api-group h3 { margin: 0 0 4px; font-size: 13px; font-weight: 600; }
+  .api-row {
+    display: grid;
+    grid-template-columns: minmax(0, 15em) minmax(0, 1fr);
+    gap: 2px 12px;
+    padding: 4px 0;
+    border-top: 1px solid var(--line);
+  }
+  .api-row code { font: 500 12.5px/1.5 var(--font-mono); overflow-wrap: anywhere; }
+  .api-row span { color: var(--ink-2); font-size: 13px; }
+
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+
+  @media (max-width: 860px) {
+    .app { height: auto; min-height: 100%; }
+    .grid {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: none;
+      grid-template-areas: "code" "input" "out";
+    }
+    .code-pane textarea { min-height: 300px; }
+    .input-pane textarea { min-height: 150px; }
+    .panel { min-height: 260px; }
+    .api-row { grid-template-columns: minmax(0, 1fr); }
+  }
+</style>
+
+<div class="app">
+  <header class="bar">
+    <div class="brand">
+      <h1>QSimpleParser Workbench</h1>
+      <p>Write a parser, run it on your text.</p>
+    </div>
+    <div class="controls">
+      <label class="sr-only" for="examples">Load an example</label>
+      <select id="examples"></select>
+      <button class="run" id="run" type="button">Run <kbd>Ctrl ↵</kbd></button>
+    </div>
+  </header>
+
+  <main class="grid">
+    <section class="pane code-pane">
+      <div class="pane-head">
+        <label class="label" for="code">Parser code (JavaScript)</label>
+        <span class="hint">Tab indents. Esc, then Tab, leaves the editor.</span>
+      </div>
+      <textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" aria-describedby="code-help"></textarea>
+      <span id="code-help" class="sr-only">Press Escape then Tab to move focus out of the editor.</span>
+    </section>
+
+    <section class="pane input-pane">
+      <div class="pane-head">
+        <label class="label" for="input">Input text</label>
+        <span class="hint" id="input-stats"></span>
+      </div>
+      <textarea id="input" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off"></textarea>
+    </section>
+
+    <section class="pane out-pane">
+      <div class="tabs">
+        <div class="tablist" role="tablist" aria-label="Right panel">
+          <button class="tab" role="tab" id="tab-out" aria-controls="panel-out" aria-selected="true" type="button">Output</button>
+          <button class="tab" role="tab" id="tab-api" aria-controls="panel-api" aria-selected="false" type="button">API</button>
+        </div>
+        <span class="status" id="status" role="status" aria-live="polite">Ready</span>
+      </div>
+
+      <div class="panel" id="panel-out" role="tabpanel" aria-labelledby="tab-out">
+        <div class="sec" id="sec-error" hidden>
+          <h2>Error</h2>
+          <pre class="error" id="error"></pre>
+        </div>
+        <div class="sec" id="sec-result">
+          <h2>Result</h2>
+          <p id="summary" hidden></p>
+          <pre class="box" id="result"></pre>
+        </div>
+        <div class="sec" id="sec-matches" hidden>
+          <h2>Matches in the input</h2>
+          <pre class="box" id="matches"></pre>
+        </div>
+        <div class="sec" id="sec-console" hidden>
+          <h2>Console</h2>
+          <pre class="box" id="console"></pre>
+        </div>
+      </div>
+
+      <div class="panel" id="panel-api" role="tabpanel" aria-labelledby="tab-api" hidden>
+        <div class="api-group">
+          <h3>In your code</h3>
+          <div class="api-row"><code>input</code><span>The text from the Input pane.</span></div>
+          <div class="api-row"><code>print(a, b, …)</code><span>Writes a line to Console. <code>console.log</code> does the same.</span></div>
+          <div class="api-row"><code>last expression</code><span>Its value appears under Result. A parser shows all its matches, highlighted in the input.</span></div>
+        </div>
+        <div class="api-group">
+          <h3>Make a parser</h3>
+          <div class="api-row"><code>chaR('a')</code><span>One character (or a character code).</span></div>
+          <div class="api-row"><code>string('abc', caseSensitive = true)</code><span>A literal string.</span></div>
+          <div class="api-row"><code>pattern('a-zA-Z_')</code><span>One character from a regex character class.</span></div>
+          <div class="api-row"><code>letter()  digit()  word()</code><span>Letter, digit, letter or digit.</span></div>
+          <div class="api-row"><code>space()  spaceOptional()</code><span>One or more / zero or more whitespace characters.</span></div>
+          <div class="api-row"><code>newLine()</code><span>A line feed.</span></div>
+          <div class="api-row"><code>firstChar()  lastChar()</code><span>The first or last character of the input.</span></div>
+          <div class="api-row"><code>remainingChars()  allInput()</code><span>Everything to the end / the whole input.</span></div>
+          <div class="api-row"><code>any(end, except?)</code><span>Any character while <code>end</code> still occurs later. <code>except</code> is a character-class body such as <code>'a-z'</code>.</span></div>
+          <div class="api-row"><code>charsBefore(p)</code><span>Every character up to the first match of <code>p</code>.</span></div>
+          <div class="api-row"><code>wrap(p)  debug()</code><span>Delegate to another parser / log the position.</span></div>
+        </div>
+        <div class="api-group">
+          <h3>Combine</h3>
+          <div class="api-row"><code>p.seq(q)  p.and(q)</code><span><code>p</code> followed by <code>q</code>.</span></div>
+          <div class="api-row"><code>p.or(q)  p.oR(q)</code><span><code>p</code>, or <code>q</code> if <code>p</code> fails.</span></div>
+          <div class="api-row"><code>p.optional()</code><span>Zero or one match.</span></div>
+          <div class="api-row"><code>p.star()  p.plus()</code><span>Zero or more / one or more.</span></div>
+          <div class="api-row"><code>p.repeat(min, max = -1)</code><span>Between <code>min</code> and <code>max</code> matches. Without <code>max</code>, exactly <code>min</code>.</span></div>
+          <div class="api-row"><code>p.skip()</code><span>Consume a match at the start without keeping it.</span></div>
+        </div>
+        <div class="api-group">
+          <h3>Run</h3>
+          <div class="api-row"><code>p.parse(input, start = 0)</code><span>Match exactly at <code>start</code>. Returns a Result.</span></div>
+          <div class="api-row"><code>p.firstMatch(input, start)</code><span>First Result at or after <code>start</code>.</span></div>
+          <div class="api-row"><code>p.firstStringMatch(input, start)</code><span>Its text, or an empty string.</span></div>
+          <div class="api-row"><code>p.lastMatch(…)  p.lastStringMatch(…)</code><span>The last match.</span></div>
+          <div class="api-row"><code>p.allMatches(…)  p.allStringMatches(…)</code><span>Every non-overlapping match, as Success objects / strings.</span></div>
+          <div class="api-row"><code>p.hasMatch(input, start)</code><span>true or false.</span></div>
+          <div class="api-row"><code>p.replaceIn(input, text, start, count)</code><span>Replace matches. <code>count = -1</code> replaces all.</span></div>
+          <div class="api-row"><code>p.replaceInMapped(input, fn, start, count)</code><span>Replace each match with <code>fn(matchText)</code>.</span></div>
+          <div class="api-row"><code>p.removeFrom(input, start, count)</code><span>Delete matches.</span></div>
+        </div>
+        <div class="api-group">
+          <h3>Results</h3>
+          <div class="api-row"><code>r.isSuccess()  r.isFailure()</code><span>Which one it is.</span></div>
+          <div class="api-row"><code>r.success()</code><span>A Success with <code>.value()</code>, <code>.start()</code>, <code>.end()</code>.</span></div>
+          <div class="api-row"><code>r.failure()</code><span>A Failure with <code>.position()</code>, <code>.message()</code>.</span></div>
+        </div>
+        <div class="api-group">
+          <h3>Custom parsers</h3>
+          <div class="api-row"><code>class X extends Parser</code><span>Call <code>super('X')</code>, implement <code>parseOn(ctx)</code> using <code>ctx.buffer()</code> and <code>ctx.position()</code>, and return <code>succeed(start, end)</code> or <code>fail(position, message)</code>.</span></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script id="engine">
+/**
+ * QSimpleParser for JavaScript
+ * Port of the Qt/C++ library by Edwin Magabe (MagabeLab, Tanzania):
+ * https://github.com/magabe26/QSimpleParser
+ */
+var QSP = (function () {
+  'use strict';
+
+  // ---------------------------------------------------------------- errors
+
+  class ParserError extends Error {
+    constructor(message) {
+      super(message);
+      this.name = 'ParserError';
+    }
+  }
+
+  function describeRange(name, invalidValue, start, end, message) {
+    if (message) return message;
+    const label = (name || 'value') + ' ' + invalidValue;
+    if (end > start) return label + ' is not in range ' + start + '..' + end + ' (inclusive)';
+    if (end < start) return label + ': the valid range is empty';
+    return label + ': the only valid value is ' + start;
+  }
+
+  class ParserRangeError extends ParserError {
+    constructor(invalidValue, minValue, maxValue, name, message) {
+      super(describeRange(name, invalidValue, minValue, maxValue, message));
+      this.name = 'ParserRangeError';
+      this.invalidValue = invalidValue;
+      this.start = minValue;
+      this.end = maxValue;
+      this.argName = name || '';
+    }
+
+    static checkValidRange(start, end, length, startName, endName, message) {
+      if (0 > start || start > length) {
+        throw new ParserRangeError(start, 0, length, startName || 'start', message);
+      }
+      if (start > end || end > length) {
+        throw new ParserRangeError(end, start, length, endName || 'end', message);
+      }
+      return end;
+    }
+  }
+
+  // ------------------------------------------------- context and results
+
+  class Context {
+    constructor(buffer, position) {
+      this._buffer = buffer;
+      this._position = position;
+    }
+    buffer() { return this._buffer; }
+    position() { return this._position; }
+  }
+
+  class Success {
+    constructor(start, end, value) {
+      this._start = start;
+      this._end = end;
+      this._value = value || '';
+    }
+    start() { return this._start; }
+    end() { return this._end; }
+    value() { return this._value; }
+    /** Copy carrying `value`, unless this one already has a non-empty value. */
+    withValue(value) {
+      return this._value === '' ? new Success(this._start, this._end, value) : this;
+    }
+    toString() {
+      return '>>> Success:  ' + this._value + ' (start: ' + this._start + ' - end: ' + this._end + ') <<<';
+    }
+  }
+
+  class Failure {
+    constructor(position, message) {
+      this._position = position;
+      this._message = message || '';
+    }
+    position() { return this._position; }
+    message() { return this._message; }
+    toString() {
+      return '>>> Failure:  (position: ' + this._position + ')\n' + this._message + ' <<<\n';
+    }
+  }
+
+  class Result {
+    constructor(successOrFailure) {
+      if (successOrFailure instanceof Success) {
+        this._success = successOrFailure;
+        this._failure = null;
+      } else {
+        this._success = null;
+        this._failure = successOrFailure;
+      }
+    }
+    isSuccess() { return this._success !== null; }
+    isFailure() { return this._failure !== null; }
+    success() {
+      if (this._success === null) throw new Error('Result is a failure: ' + this._failure);
+      return this._success;
+    }
+    failure() {
+      if (this._failure === null) throw new Error('Result is a success: ' + this._success);
+      return this._failure;
+    }
+    toString() {
+      return this.isFailure() ? this._failure.toString() : this._success.toString();
+    }
+  }
+
+  function succeed(start, end) { return new Result(new Success(start, end)); }
+  function fail(position, message) { return new Result(new Failure(position, message)); }
+
+  function getSubstring(input, start, end) {
+    return input.substring(start, end !== -1 ? end : input.length);
+  }
+
+  function isParserError(e) { return e instanceof ParserError; }
+
+  // ---------------------------------------------------------------- Parser
+
+  class Parser {
+    constructor(name) {
+      this._name = name || '';
+      this._skippers = [];
+    }
+
+    name() { return this._name; }
+
+    /** Override in subclasses. Return succeed(start, end) or fail(position, message). */
+    parseOn(context) {
+      throw new Error('parseOn() is not implemented in ' + this._name);
+    }
+
+    // ----- combinators
+
+    _derive(parser) {
+      parser._skippers = this._skippers;
+      return parser;
+    }
+
+    seq(other) { return this._derive(new SeqParser(this, other)); }
+    and(other) { return this.seq(other); }
+    oR(other) { return this._derive(new OrParser(this, other)); }
+    or(other) { return this.oR(other); }
+    optional() { return this._derive(new OptionalParser(this)); }
+    star() { return this._derive(new StarParser(this)); }
+    plus() { return this._derive(new PlusParser(this)); }
+
+    /**
+     * At least `min` and at most `max` matches. If `max` is -1 (the default) or not
+     * greater than `min`, exactly `min` matches are consumed.
+     */
+    repeat(min, max) {
+      return this._derive(new RepeatParser(this, min, max === undefined ? -1 : max));
+    }
+
+    /** Consumes this parser's match at the start of a search (or first in a sequence) without keeping it. */
+    skip() {
+      const parser = new SkipParser(this);
+      parser._skippers = [new SkipParser(this)];
+      return parser;
+    }
+
+    isNull() { return false; }
+
+    // ----- running
+
+    parse(input, start) {
+      start = start === undefined ? 0 : start;
+      return this._parseImpl(input, this._qualifiedPosition(input, start));
+    }
+
+    firstMatch(input, start) {
+      start = start === undefined ? 0 : start;
+      return this._firstMatchImpl(input, this._qualifiedPosition(input, start));
+    }
+
+    firstStringMatch(input, start) {
+      const result = this.firstMatch(input, start);
+      return result.isSuccess() ? result.success().value() : '';
+    }
+
+    lastMatch(input, start) {
+      start = start === undefined ? 0 : start;
+      const matches = this.allMatches(input, start);
+      return matches.length ? new Result(matches[matches.length - 1]) : new Result(new Failure(start));
+    }
+
+    lastStringMatch(input, start) {
+      const result = this.lastMatch(input, start);
+      return result.isSuccess() ? result.success().value() : '';
+    }
+
+    allMatches(input, start) {
+      start = start === undefined ? 0 : start;
+      const list = [];
+      let position = this._qualifiedPosition(input, start);
+      while (position >= 0 && position < input.length) {
+        const result = this._parseImpl(input, position);
+        if (result.isSuccess()) {
+          const success = result.success();
+          if (success.value() !== '') list.push(success);
+          position = position === success.end() ? position + 1 : success.end();
+        } else {
+          position++;
+        }
+      }
+      return list;
+    }
+
+    allStringMatches(input, start) {
+      return this.allMatches(input, start).map(function (m) { return m.value(); });
+    }
+
+    hasMatch(input, start) {
+      return this.firstMatch(input, start).isSuccess();
+    }
+
+    // ----- removing / replacing
+
+    removeFrom(input, start, count) {
+      return this.replaceIn(input, '', start, count);
+    }
+
+    replaceIn(input, replacement, start, count) {
+      return this.replaceInMapped(input, function () { return replacement; }, start, count);
+    }
+
+    /** `count` of -1 (the default) replaces every match. */
+    replaceInMapped(input, replace, start, count) {
+      start = start === undefined ? 0 : start;
+      count = count === undefined ? -1 : count;
+      if (start < 0 || start >= input.length) return input;
+      const matches = this.allMatches(input, start);
+      if (!matches.length) return input;
+      let output = '';
+      let last = 0;
+      let replaced = 0;
+      for (const match of matches) {
+        output += input.substring(last, match.start()) + replace(match.value());
+        last = match.end();
+        replaced++;
+        if (count !== -1 && replaced === count) break;
+      }
+      return output + input.substring(last);
+    }
+
+    toString() { return this._name; }
+
+    // ----- internals
+
+    _parseImpl(input, position) {
+      ParserRangeError.checkValidRange(position, input.length, input.length);
+      const result = this.parseOn(new Context(input, position));
+      if (result.isSuccess()) {
+        const success = result.success();
+        ParserRangeError.checkValidRange(success.start(), success.end(), input.length);
+        return new Result(success.withValue(getSubstring(input, success.start(), success.end())));
+      }
+      return result;
+    }
+
+    _firstMatchImpl(input, position) {
+      let message = '';
+      while (position >= 0 && position < input.length) {
+        const result = this._parseImpl(input, position);
+        if (result.isSuccess()) return result;
+        message = result.failure().message();
+        position++;
+      }
+      return new Result(new Failure(position, message));
+    }
+
+    _qualifiedPosition(input, start) {
+      for (const skipper of this._skippers) {
+        try {
+          const result = skipper._parseImpl(input, start);
+          if (result.isSuccess() && result.success().end() > start) start = result.success().end();
+        } catch (e) {
+          // a skipper that cannot run simply skips nothing
+        }
+      }
+      return start;
+    }
+  }
+
+  // ------------------------------------------------------------ combinators
+
+  class SeqParser extends Parser {
+    constructor(first, second) {
+      super('SeqParser');
+      this._first = first;
+      this._second = second;
+    }
+    parseOn(context) {
+      const buffer = context.buffer();
+      const start = context.position();
+      let position = start;
+
+      if (this._first instanceof SkipParser) {
+        try {
+          return this._second._parseImpl(buffer, position);
+        } catch (e) {
+          if (!isParserError(e)) throw e;
+          return fail(position, e.message);
+        }
+      }
+
+      try {
+        let result = this._first._parseImpl(buffer, position);
+        if (!result.isSuccess()) return result;
+        position = result.success().end();
+        try {
+          result = this._second._parseImpl(buffer, position);
+          if (!result.isSuccess()) return result;
+          position = result.success().end();
+        } catch (e) {
+          if (!isParserError(e)) throw e;
+          return fail(position, e.message);
+        }
+      } catch (e) {
+        if (!isParserError(e)) throw e;
+        return fail(position, e.message);
+      }
+      return succeed(start, position);
+    }
+  }
+
+  class OrParser extends Parser {
+    constructor(first, second) {
+      super('OrParser');
+      this._first = first;
+      this._second = second;
+    }
+    parseOn(context) {
+      const buffer = context.buffer();
+      const position = context.position();
+      try {
+        let result = this._first._parseImpl(buffer, position);
+        if (result.isFailure()) {
+          try {
+            result = this._second._parseImpl(buffer, position);
+          } catch (e) {
+            if (!isParserError(e)) throw e;
+            result = fail(position, e.message);
+          }
+        }
+        return result;
+      } catch (e) {
+        if (!isParserError(e)) throw e;
+        try {
+          return this._second._parseImpl(buffer, position);
+        } catch (e2) {
+          if (!isParserError(e2)) throw e2;
+          return fail(position, e2.message);
+        }
+      }
+    }
+  }
+
+  class StarParser extends Parser {
+    constructor(child) {
+      super('StarParser');
+      this._child = child;
+    }
+    parseOn(context) {
+      const buffer = context.buffer();
+      const start = context.position();
+      let end = start;
+      try {
+        let result = this._child._parseImpl(buffer, end);
+        while (result.isSuccess()) {
+          const newEnd = result.success().end();
+          const progressed = newEnd > end;
+          end = newEnd;
+          if (!progressed) break; // zero-width match: repeating would never finish
+          try {
+            result = this._child._parseImpl(buffer, end);
+          } catch (e) {
+            if (!isParserError(e)) throw e;
+            break;
+          }
+        }
+        return succeed(start, end);
+      } catch (e) {
+        if (!isParserError(e)) throw e;
+        return succeed(start, end);
+      }
+    }
+  }
+
+  class PlusParser extends Parser {
+    constructor(child) {
+      super('PlusParser');
+      this._child = child;
+    }
+    parseOn(context) {
+      const buffer = context.buffer();
+      const start = context.position();
+      let end = start;
+      let success = false;
+      let message = '';
+      try {
+        let result = this._child._parseImpl(buffer, end);
+        while (result.isSuccess()) {
+          const newEnd = result.success().end();
+          const progressed = newEnd > end;
+          end = newEnd;
+          success = true;
+          if (!progressed) break; // zero-width match: repeating would never finish
+          try {
+            result = this._child._parseImpl(buffer, end);
+          } catch (e) {
+            if (!isParserError(e)) throw e;
+            message = e.message;
+            break;
+          }
+        }
+        return success ? succeed(start, end) : fail(end, message);
+      } catch (e) {
+        if (!isParserError(e)) throw e;
+        return fail(context.position(), e.message);
+      }
+    }
+  }
+
+  class OptionalParser extends Parser {
+    constructor(child) {
+      super('OptionalParser');
+      this._child = child;
+    }
+    parseOn(context) {
+      const start = context.position();
+      try {
+        const result = this._child._parseImpl(context.buffer(), start);
+        return result.isSuccess() ? succeed(start, result.success().end()) : succeed(start, start);
+      } catch (e) {
+        if (!isParserError(e)) throw e;
+        return succeed(start, start);
+      }
+    }
+  }
+
+  class RepeatParser extends Parser {
+    constructor(child, min, max) {
+      super('RepeatParser');
+      this._child = child;
+      this._min = min;
+      this._max = max;
+    }
+    parseOn(context) {
+      const buffer = context.buffer();
+      const start = context.position();
+      let end = start;
+
+      for (let i = 0; i < this._min; i++) {
+        try {
+          const result = this._child._parseImpl(buffer, end);
+          if (result.isSuccess()) {
+            end = result.success().end();
+          } else {
+            return fail(start, result.failure().message());
+          }
+        } catch (e) {
+          if (!isParserError(e)) throw e;
+          return fail(start, e.message);
+        }
+      }
+
+      if (this._max === -1 || this._max <= this._min) return succeed(start, end);
+
+      for (let i = 0; i < this._max - this._min; i++) {
+        try {
+          const result = this._child._parseImpl(buffer, end);
+          if (!result.isSuccess() || result.success().end() === end) break;
+          end = result.success().end();
+        } catch (e) {
+          if (!isParserError(e)) throw e;
+          break;
+        }
+      }
+      return succeed(start, end);
+    }
+  }
+
+  class SkipParser extends Parser {
+    constructor(child) {
+      super('SkipParser');
+      this._child = child;
+    }
+    parseOn(context) {
+      const position = context.position();
+      try {
+        const result = this._child._parseImpl(context.buffer(), position);
+        if (result.isSuccess()) {
+          const end = result.success().end();
+          return succeed(end, end);
+        }
+        return succeed(position, position);
+      } catch (e) {
+        if (!isParserError(e)) throw e;
+        return succeed(position, position);
+      }
+    }
+  }
+
+  // ----------------------------------------------------------- basic parsers
+
+  class NullParser extends Parser {
+    constructor() { super('NullParser'); }
+    parseOn(context) { return fail(context.position(), 'NullDelegate'); }
+    isNull() { return true; }
+  }
+
+  class DebugParser extends Parser {
+    constructor() { super('DebugParser'); }
+    parseOn(context) {
+      console.log('>>> DebugParser:\n input = ' + context.buffer() + '\n\nposition = ' + context.position() + ' <<<');
+      return succeed(context.position(), context.position());
+    }
+  }
+
+  class WrapParser extends Parser {
+    constructor(child) {
+      super('WrapParser');
+      this._child = child;
+    }
+    parseOn(context) {
+      try {
+        return this._child._parseImpl(context.buffer(), context.position());
+      } catch (e) {
+        if (!isParserError(e)) throw e;
+        return fail(context.position(), e.message);
+      }
+    }
+  }
+
+  class CharParser extends Parser {
+    constructor(character) {
+      super('CharParser');
+      this._char = character;
+    }
+    parseOn(context) {
+      const buffer = context.buffer();
+      const position = context.position();
+      if (position < buffer.length) {
+        return buffer.charAt(position) === this._char ? succeed(position, position + 1) : fail(position);
+      }
+      return fail(buffer.length);
+    }
+  }
+
+  class LastCharDelegateParser extends Parser {
+    constructor() { super('LastCharParserDelegate'); }
+    parseOn(context) {
+      const buffer = context.buffer();
+      const position = context.position();
+      if (position === buffer.length - 1) return succeed(position, buffer.length);
+      return fail(position, 'Not the end of input');
+    }
+  }
+
+  class LastCharParser extends Parser {
+    constructor() { super('LastCharParser'); }
+    parseOn(context) {
+      try {
+        return new LastCharDelegateParser().plus().parse(context.buffer(), context.position());
+      } catch (e) {
+        if (!isParserError(e)) throw e;
+        return fail(context.position(), e.message);
+      }
+    }
+  }
+
+  class FirstCharParser extends Parser {
+    constructor() { super('FirstCharParser'); }
+    parseOn(context) {
+      const position = context.position();
+      if (position === 0) return succeed(position, 1);
+      return fail(position, 'Not the start of input');
+    }
+  }
+
+  class AnyCharacterParser extends Parser {
+    constructor(end, except) {
+      super('AnyCharacterParser');
+      this._end = end;
+      this._notExcepted = except ? new RegExp('^[^' + except + ']$') : null;
+    }
+    parseOn(context) {
+      const buffer = context.buffer();
+      const position = context.position();
+
+      const match = this._end._firstMatchImpl(buffer, position);
+      if (!match.isSuccess()) return fail(position, 'AnyCharacterParser: end not found');
+
+      const start = position;
+      const endStart = match.success().start();
+      if (start >= endStart) return fail(start, 'AnyCharacterParser: character not found');
+      if (this._notExcepted === null || this._notExcepted.test(buffer.charAt(start))) {
+        return succeed(start, start + 1);
+      }
+      return fail(start, 'AnyCharacterParser: unwanted character found');
+    }
+  }
+
+  class StringParser extends Parser {
+    constructor(string, caseSensitive) {
+      super('StringParser');
+      this._string = string;
+      this._caseSensitive = caseSensitive;
+    }
+    parseOn(context) {
+      const buffer = context.buffer();
+      const start = context.position();
+      if (start < buffer.length) {
+        let end = start;
+        for (let i = 0; i < this._string.length; i++, end++) {
+          let match = false;
+          if (end < buffer.length) {
+            const expected = this._string.charAt(i);
+            const actual = buffer.charAt(end);
+            match = this._caseSensitive
+              ? expected === actual
+              : expected.toLowerCase() === actual || expected.toUpperCase() === actual;
+          }
+          if (!match) return fail(end, 'StringParser:: Failed , No match found');
+        }
+        return succeed(start, end);
+      }
+      return fail(buffer.length, 'StringParser:: Failed , No match found');
+    }
+  }
+
+  class PatternParser extends Parser {
+    constructor(pattern) {
+      super('PatternParser');
+      this._regex = new RegExp('^[' + pattern + ']$');
+    }
+    parseOn(context) {
+      const buffer = context.buffer();
+      const position = context.position();
+      if (position < buffer.length) {
+        return this._regex.test(buffer.charAt(position)) ? succeed(position, position + 1) : fail(position);
+      }
+      return fail(buffer.length);
+    }
+  }
+
+  // -------------------------------------------------------------- factories
+
+  /** `c` is a one-character string or a character code. */
+  function chaR(c) {
+    return new CharParser(typeof c === 'number' ? String.fromCharCode(c) : String(c).charAt(0));
+  }
+  function firstChar() { return new FirstCharParser(); }
+  function lastChar() { return new LastCharParser(); }
+  function any(end, except) { return new AnyCharacterParser(end, except); }
+  function remainingChars() { return any(lastChar()).star().seq(lastChar()); }
+  function charsBefore(parser) { return any(parser).star(); }
+  function newLine() { return chaR('\n'); }
+  function string(s, caseSensitive) { return new StringParser(s, caseSensitive === undefined ? true : caseSensitive); }
+  /** `pattern` is the inside of a regex character class, e.g. 'a-zA-Z'. */
+  function pattern(p) { return new PatternParser(p); }
+  function letter() { return pattern('a-zA-Z'); }
+  function digit() { return pattern('0-9'); }
+  function word() { return letter().or(digit()); }
+
+  const WHITESPACE_CHAR = chaR('\t').or(chaR('\n')).or(chaR(0x0B)).or(chaR(0x0C))
+    .or(chaR('\r')).or(chaR(' ')).or(chaR(0x85)).or(chaR(0xA0));
+
+  function spaceOptional() { return WHITESPACE_CHAR.star(); }
+  function space() { return WHITESPACE_CHAR.plus(); }
+  function allInput() { return firstChar().seq(any(lastChar()).star().seq(lastChar())); }
+  function debug() { return new DebugParser(); }
+  function wrap(another) { return new WrapParser(another); }
+
+  return {
+    // parsers
+    chaR: chaR, string: string, pattern: pattern, letter: letter, digit: digit, word: word,
+    space: space, spaceOptional: spaceOptional, newLine: newLine,
+    firstChar: firstChar, lastChar: lastChar, remainingChars: remainingChars, allInput: allInput,
+    any: any, charsBefore: charsBefore, wrap: wrap, debug: debug,
+    // building blocks for custom parsers
+    Parser: Parser, NullParser: NullParser, Context: Context, Result: Result,
+    Success: Success, Failure: Failure, ParserError: ParserError, ParserRangeError: ParserRangeError,
+    succeed: succeed, fail: fail
+  };
+})();
+
+
+
+/**
+ * Runs user code with the QSimpleParser API in scope.
+ * Works on the page and inside a Web Worker (no DOM access).
+ */
+function inspectValue(v, top) {
+  if (typeof v === 'string') return top ? v : JSON.stringify(v);
+  if (v === undefined) return 'undefined';
+  if (v === null) return 'null';
+  if (v instanceof QSP.Success) {
+    return 'Success ' + JSON.stringify(v.value()) + '  [' + v.start() + ', ' + v.end() + ')';
+  }
+  if (v instanceof QSP.Failure) {
+    return 'Failure at ' + v.position() + (v.message() ? ': ' + v.message() : '');
+  }
+  if (v instanceof QSP.Result) return v.isSuccess() ? inspectValue(v.success()) : inspectValue(v.failure());
+  if (v instanceof QSP.Parser) return '<' + v.name() + '>';
+  if (v instanceof Error) return v.name + ': ' + v.message;
+  if (typeof v === 'function') return '[function ' + (v.name || 'anonymous') + ']';
+  if (Array.isArray(v)) {
+    const items = v.map(function (x) { return inspectValue(x, false); });
+    const flat = '[' + items.join(', ') + ']';
+    return flat.length <= 90 ? flat : '[\n  ' + items.join(',\n  ') + '\n]';
+  }
+  try {
+    return JSON.stringify(v, null, 2);
+  } catch (e) {
+    return String(v);
+  }
+}
+
+function collectHighlights(value, input) {
+  const ranges = [];
+  const add = function (s) { ranges.push([s.start(), s.end()]); };
+  if (value instanceof QSP.Parser) {
+    value.allMatches(input).forEach(add);
+  } else if (value instanceof QSP.Result) {
+    if (value.isSuccess()) add(value.success());
+  } else if (value instanceof QSP.Success) {
+    add(value);
+  } else if (Array.isArray(value) && value.length && value.every(function (x) { return x instanceof QSP.Success; })) {
+    value.forEach(add);
+  }
+  return ranges;
+}
+
+function runUserCode(code, input) {
+  const logs = [];
+  const push = function () {
+    logs.push(Array.prototype.map.call(arguments, function (x) { return inspectValue(x, true); }).join(' '));
+  };
+  const sandboxConsole = { log: push, info: push, warn: push, error: push, debug: push };
+  const out = { logs: logs, value: null, summary: null, error: null, highlights: [] };
+
+  try {
+    const names = Object.keys(QSP);
+    const values = names.map(function (k) { return QSP[k]; });
+    // Direct eval inside the function returns the value of the last expression statement.
+    const runner = new Function(names.join(','), 'input', 'print', 'console', '__code', 'return eval(__code);');
+    const value = runner.apply(null, values.concat([input, push, sandboxConsole, code]));
+
+    out.highlights = collectHighlights(value, input);
+    if (value instanceof QSP.Parser) {
+      const n = out.highlights.length;
+      out.summary = n + (n === 1 ? ' match' : ' matches') + ' in the input';
+      out.value = inspectValue(value.allStringMatches(input), false);
+    } else if (value !== undefined) {
+      out.value = inspectValue(value, false);
+      if (out.highlights.length) {
+        out.summary = out.highlights.length + (out.highlights.length === 1 ? ' match' : ' matches') + ' in the input';
+      }
+    }
+  } catch (e) {
+    out.error = (e && e.name ? e.name + ': ' : '') + (e && e.message ? e.message : String(e));
+  }
+  return out;
+}
+
+
+</script>
+
+<script>
+var EXAMPLES = [
+  {
+    title: 'Find a sequence',
+    code: String.raw`// Build parsers with chaR, string, pattern, ... and combine them with seq, or, star, plus.
+// End the code with a parser and every match in the input is highlighted.
+const abc = chaR('a').seq(chaR('b')).seq(chaR('c'));
+
+abc`,
+    input: 'abcdABCD abc xabcx'
+  },
+  {
+    title: 'Numbers and words',
+    code: String.raw`const number = digit().plus()
+  .seq(chaR('.').seq(digit().plus()).optional());
+
+print('numbers:', number.allStringMatches(input));
+print('words:  ', letter().plus().allStringMatches(input));
+
+number`,
+    input: 'Order 12 shipped 3.5 kg of tea and 40 cups on day 7.'
+  },
+  {
+    title: 'Key and value pairs',
+    code: String.raw`const key = letter().plus();
+const val = word().plus();
+const pair = key
+  .seq(spaceOptional()).seq(chaR('=')).seq(spaceOptional())
+  .seq(val);
+
+for (const m of pair.allMatches(input)) {
+  const [k, v] = m.value().split('=').map(s => s.trim());
+  print(k, '→', v);
+}
+
+pair`,
+    input: 'name = Ada; age=36; city = Mwanza; shoe size: 42'
+  },
+  {
+    title: 'Quoted text',
+    code: String.raw`// any(end) takes any character as long as "end" can still be found further on.
+const quote = chaR('"');
+const quoted = quote.seq(any(quote).star()).seq(quote);
+
+print(quoted.allStringMatches(input));
+
+quoted`,
+    input: `say "hello" and "good bye" but not 'this'`
+  },
+  {
+    title: 'Replace text',
+    code: String.raw`const hex = chaR('#').seq(pattern('0-9a-fA-F').repeat(6));
+
+// replaceIn(input, text) and removeFrom(input) work the same way.
+hex.replaceInMapped(input, m => m.toUpperCase())`,
+    input: 'colors: #ff8800, #00aa55 and #1e1e1e'
+  },
+  {
+    title: 'Skip a prefix',
+    code: String.raw`// skip() consumes its match at the start without adding it to the result.
+const message = string('LOG:').skip().seq(remainingChars());
+
+message.firstStringMatch(input)`,
+    input: 'LOG: server started'
+  },
+  {
+    title: 'Your own parser',
+    code: String.raw`// Extend Parser, then return succeed(start, end) or fail(position, message).
+class Hex extends Parser {
+  constructor() { super('Hex'); }
+  parseOn(ctx) {
+    const s = ctx.buffer(), i = ctx.position();
+    if (s.slice(i, i + 2) !== '0x') return fail(i, 'expected 0x');
+    let j = i + 2;
+    while (j < s.length && /[0-9a-f]/i.test(s[j])) j++;
+    return j > i + 2 ? succeed(i, j) : fail(j, 'no digits after 0x');
+  }
+}
+
+new Hex()`,
+    input: 'ids: 0x1F, 0xdeadbeef, 0x, 42'
+  }
+];
+
+
+</script>
+
+<script>
+(function () {
+  'use strict';
+
+  var LIMIT_MS = 3000;
+  var $ = function (id) { return document.getElementById(id); };
+  var codeEl = $('code'), inputEl = $('input'), runBtn = $('run'), examplesEl = $('examples');
+  var statusEl = $('status');
+
+  // ---------- storage (per-viewer convenience only)
+  function load(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
+  function save(key, value) { try { localStorage.setItem(key, value); } catch (e) { /* ignore */ } }
+
+  // ---------- examples
+  (function fillExamples() {
+    var first = document.createElement('option');
+    first.textContent = 'Load an example…';
+    first.value = '';
+    examplesEl.appendChild(first);
+    EXAMPLES.forEach(function (ex, i) {
+      var o = document.createElement('option');
+      o.value = String(i);
+      o.textContent = ex.title;
+      examplesEl.appendChild(o);
+    });
+  })();
+
+  examplesEl.addEventListener('change', function () {
+    var ex = EXAMPLES[Number(examplesEl.value)];
+    examplesEl.selectedIndex = 0;
+    if (!ex) return;
+    codeEl.value = ex.code;
+    inputEl.value = ex.input;
+    persist();
+    updateStats();
+    run();
+  });
+
+  // ---------- editor behaviour
+  var escArmed = false;
+  function insertText(el, text) {
+    el.focus();
+    var done = false;
+    try { done = document.execCommand('insertText', false, text); } catch (e) { done = false; }
+    if (!done) {
+      var s = el.selectionStart, e2 = el.selectionEnd;
+      el.setRangeText(text, s, e2, 'end');
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  }
+
+  codeEl.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') { escArmed = true; return; }
+    if (e.key === 'Tab' && !e.shiftKey) {
+      if (escArmed) { escArmed = false; return; }
+      e.preventDefault();
+      insertText(codeEl, '  ');
+      return;
+    }
+    escArmed = false;
+    if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
+      var pos = codeEl.selectionStart;
+      var before = codeEl.value.slice(0, pos);
+      var line = before.slice(before.lastIndexOf('\n') + 1);
+      var indent = (line.match(/^[ \t]*/) || [''])[0];
+      if (/[{(\[]\s*$/.test(line)) indent += '  ';
+      e.preventDefault();
+      insertText(codeEl, '\n' + indent);
+    }
+  });
+  codeEl.addEventListener('blur', function () { escArmed = false; });
+
+  function onRunShortcut(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); run(); }
+  }
+  codeEl.addEventListener('keydown', onRunShortcut);
+  inputEl.addEventListener('keydown', onRunShortcut);
+  runBtn.addEventListener('click', run);
+
+  function updateStats() {
+    var t = inputEl.value;
+    var lines = t === '' ? 0 : t.split('\n').length;
+    $('input-stats').textContent = t.length + ' chars · ' + lines + (lines === 1 ? ' line' : ' lines');
+  }
+  var saveTimer = null;
+  function persist() { save('qsp.code', codeEl.value); save('qsp.input', inputEl.value); }
+  function onEdit() {
+    updateStats();
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(persist, 300);
+  }
+  codeEl.addEventListener('input', onEdit);
+  inputEl.addEventListener('input', onEdit);
+
+  // ---------- tabs
+  function selectTab(which) {
+    var out = which === 'out';
+    $('tab-out').setAttribute('aria-selected', String(out));
+    $('tab-api').setAttribute('aria-selected', String(!out));
+    $('panel-out').hidden = !out;
+    $('panel-api').hidden = out;
+  }
+  $('tab-out').addEventListener('click', function () { selectTab('out'); });
+  $('tab-api').addEventListener('click', function () { selectTab('api'); });
+
+  // ---------- running
+  var engineSource = $('engine').textContent;
+
+  function runInWorker(code, input) {
+    return new Promise(function (resolve) {
+      var worker, url;
+      var finished = false, readyTimer = null, runTimer = null;
+
+      function finish(value) {
+        if (finished) return;
+        finished = true;
+        clearTimeout(readyTimer);
+        clearTimeout(runTimer);
+        try { worker.terminate(); } catch (e) { /* ignore */ }
+        try { URL.revokeObjectURL(url); } catch (e) { /* ignore */ }
+        resolve(value);
+      }
+
+      try {
+        var src = engineSource +
+          '\nself.onmessage = function (e) { self.postMessage(runUserCode(e.data.code, e.data.input)); };' +
+          '\nself.postMessage({ ready: true });';
+        url = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
+        worker = new Worker(url);
+      } catch (e) {
+        resolve({ fallback: true });
+        return;
+      }
+
+      readyTimer = setTimeout(function () { finish({ fallback: true }); }, 2000);
+      worker.onerror = function (ev) {
+        if (ev && ev.preventDefault) ev.preventDefault();
+        finish({ fallback: true });
+      };
+      worker.onmessage = function (ev) {
+        var d = ev.data;
+        if (d && d.ready) {
+          clearTimeout(readyTimer);
+          runTimer = setTimeout(function () { finish({ timeout: true }); }, LIMIT_MS);
+          worker.postMessage({ code: code, input: input });
+          return;
+        }
+        finish({ result: d });
+      };
+    });
+  }
+
+  function renderMatches(input, ranges) {
+    var box = $('matches');
+    box.textContent = '';
+    var sorted = ranges.slice().sort(function (a, b) { return a[0] - b[0]; });
+    var pos = 0;
+    sorted.forEach(function (r) {
+      var s = Math.max(r[0], pos), e = Math.min(r[1], input.length);
+      if (e <= s) return;
+      if (s > pos) box.appendChild(document.createTextNode(input.slice(pos, s)));
+      var m = document.createElement('mark');
+      m.textContent = input.slice(s, e);
+      box.appendChild(m);
+      pos = e;
+    });
+    if (pos < input.length) box.appendChild(document.createTextNode(input.slice(pos)));
+  }
+
+  function show(id, visible) { $(id).hidden = !visible; }
+
+  function render(out, input, meta) {
+    var hasError = !!out.error;
+    show('sec-error', hasError);
+    $('error').textContent = out.error || '';
+
+    var summary = $('summary');
+    summary.hidden = !out.summary;
+    summary.textContent = out.summary || '';
+
+    var result = $('result');
+    if (out.value !== null && out.value !== undefined) {
+      result.textContent = out.value;
+      result.classList.remove('muted');
+    } else {
+      result.textContent = hasError ? 'No result because the code stopped with an error.'
+        : 'Nothing to show yet. End your code with a parser or a value, or call print(…).';
+      result.classList.add('muted');
+    }
+
+    var hasMatches = out.highlights && out.highlights.length > 0;
+    show('sec-matches', hasMatches);
+    if (hasMatches) renderMatches(input, out.highlights);
+    else $('matches').textContent = '';
+
+    var hasLogs = out.logs && out.logs.length > 0;
+    show('sec-console', hasLogs);
+    $('console').textContent = hasLogs ? out.logs.join('\n') : '';
+
+    statusEl.textContent = (hasError ? 'Error' : 'Done') + ' in ' + meta.ms + ' ms' +
+      (meta.mode === 'page' ? ' · main thread, no loop guard' : '');
+  }
+
+  var running = false;
+  async function run() {
+    if (running) return;
+    running = true;
+    runBtn.disabled = true;
+    statusEl.textContent = 'Running…';
+    var code = codeEl.value, input = inputEl.value;
+    persist();
+    var t0 = performance.now();
+
+    var outcome = await runInWorker(code, input);
+    var mode = 'worker';
+    if (outcome.fallback) {
+      mode = 'page';
+      try { outcome = { result: runUserCode(code, input) }; }
+      catch (e) { outcome = { result: { logs: [], value: null, summary: null, highlights: [], error: String(e) } }; }
+    }
+
+    var ms = Math.max(1, Math.round(performance.now() - t0));
+    if (outcome.timeout) {
+      render({ logs: [], value: null, summary: null, highlights: [],
+        error: 'Stopped after ' + (LIMIT_MS / 1000) + ' seconds. A loop that never ends is the usual cause.' },
+        input, { ms: ms, mode: mode });
+      statusEl.textContent = 'Stopped after ' + (LIMIT_MS / 1000) + ' s';
+    } else {
+      var res = outcome.result;
+      if (res.error && /eval|Content Security Policy|unsafe/i.test(res.error)) {
+        res.error += '\n\nThis page cannot run your code where it is hosted because the host blocks eval. ' +
+          'Save the page as an .html file and open it from your computer.';
+      }
+      render(res, input, { ms: ms, mode: mode });
+    }
+    runBtn.disabled = false;
+    running = false;
+  }
+
+  // ---------- start in a working state
+  var savedCode = load('qsp.code'), savedInput = load('qsp.input');
+  if (savedCode !== null && savedCode !== '') {
+    codeEl.value = savedCode;
+    inputEl.value = savedInput === null ? '' : savedInput;
+  } else {
+    codeEl.value = EXAMPLES[0].code;
+    inputEl.value = EXAMPLES[0].input;
+  }
+  updateStats();
+  run();
+})();
+</script>
+
+</body>
+</html>
